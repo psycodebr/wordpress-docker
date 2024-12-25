@@ -1,3 +1,4 @@
+### **Descrição Geral**
 
 Este arquivo `docker-compose.yml` configura uma infraestrutura **100% open source** que integra serviços como WordPress, MariaDB, Redis, Prometheus, Grafana e Zabbix. A solução é modular, permitindo expansões e personalizações de forma eficiente.
 
@@ -44,7 +45,7 @@ Este arquivo `docker-compose.yml` configura uma infraestrutura **100% open sourc
 1. Suba os serviços com o comando:
 ```
     
-    `docker-compose up -d`
+    docker-compose up -d
     
    ``` 
 2. Acessos aos serviços:
