@@ -1,0 +1,198 @@
+version: '3.8'
+
+services:
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    ports:
+      - "8081:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: wordpress_pass
+      WORDPRESS_DB_NAME: wordpress_db
+      WORDPRESS_REDIS_HOST: redis
+    volumes:
+      - wordpress_data:/var/www/html
+    restart: always
+    depends_on:
+      - db
+      - redis
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1024M"
+        reservations:
+          memory: "512M"
+      restart_policy:
+        condition: on-failure
+
+  db:
+    image: mariadb:latest
+    container_name: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: wordpress_db
+      MYSQL_USER: wordpress_user
+      MYSQL_PASSWORD: wordpress_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+        reservations:
+          memory: "256M"
+      restart_policy:
+        condition: on-failure
+
+  mysql-zabbix:
+    image: mysql:8.0
+    container_name: mysql-zabbix
+    environment:
+      MYSQL_ROOT_PASSWORD: root_zabbix_pass
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix_user
+      MYSQL_PASSWORD: zabbix_pass
+    command: --log-bin-trust-function-creators=1 --require_secure_transport=OFF
+    volumes:
+      - zabbix_mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_zabbix_pass"]
+      interval: 10s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+        reservations:
+          memory: "256M"
+      restart_policy:
+        condition: on-failure
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: "256M"
+        reservations:
+          memory: "128M"
+      restart_policy:
+        condition: on-failure
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+      restart_policy:
+        condition: on-failure
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: always
+    depends_on:
+      - prometheus
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+      restart_policy:
+        condition: on-failure
+
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:latest
+    container_name: zabbix-server
+    environment:
+      DB_SERVER_HOST: mysql-zabbix
+      DB_SERVER_PORT: 3306
+      MYSQL_USER: zabbix_user
+      MYSQL_PASSWORD: zabbix_pass
+      MYSQL_DATABASE: zabbix
+      ZBX_ENABLE_SNMP_TRAPS: "true"
+    depends_on:
+      - mysql-zabbix
+    ports:
+      - "10051:10051"
+    volumes:
+      - zabbix_data:/var/lib/zabbix
+    restart: always
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1024M"
+        reservations:
+          memory: "512M"
+      restart_policy:
+        condition: on-failure
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:latest
+    container_name: zabbix-web
+    environment:
+      DB_SERVER_HOST: mysql-zabbix
+      DB_SERVER_PORT: 3306
+      MYSQL_USER: zabbix_user
+      MYSQL_PASSWORD: zabbix_pass
+      MYSQL_DATABASE: zabbix
+      ZBX_SERVER_HOST: zabbix-server
+    depends_on:
+      - zabbix-server
+    ports:
+      - "8085:8080"
+    restart: always
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1024M"
+        reservations:
+          memory: "512M"
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  wordpress_data:
+  db_data:
+  grafana_data:
+  zabbix_data:
+  zabbix_mysql_data:
